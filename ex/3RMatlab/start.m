@@ -36,7 +36,7 @@ Kd = 50 * eye(3);
 
 %define initial conditions for the manipulator
 init_qr_d1 = [0; 0; 0];
-init_qr = [0; 0; 0.0];
+init_qr = [pi/100; pi/100; pi/100];
 
 qr1 = init_qr(1);
 qr2 = init_qr(2);
@@ -82,7 +82,8 @@ disp('Starting ...');
     opts = odeset('RelTol',1e-6,'AbsTol',1e-6);
     opts = odeset(opts,'OutputFcn','odeplot');
     [t, youtput] = ode45(@(t,y) modelNameFun(t,y,parameters), [0:sample_time:tEnd], ic, opts);
-    
+    legend('dq_1', 'dq_2', 'dq_3', 'q_1', 'q_2', 'q_3');
+
     tLength = length(t);
     additional.qchd = zeros(3,tLength);
     additional.qchd_d1 = zeros(3,tLength);

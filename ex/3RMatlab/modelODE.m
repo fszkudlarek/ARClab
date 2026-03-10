@@ -65,7 +65,10 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
     B = ...
     [[1, 0, 0]; [0, 1, 0]; [0, 0, 1]];
     T = ...
-    [[0]; [0]; [0]];
+    Tv*q_d1 + Ts * sign(q_d1);
+    %T = ...
+    %[0;0;0];
+    
     %calculate friction in manipulator joints
     %use Tustin model with Tv, Ts and Tk coefficients
     %velocities for each joints are in vector q_d1
@@ -83,33 +86,37 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
 
         % calculate F
         % F = P - J M^-1 C q' - J M^-1 D - J M^-1 T        
-        F = zeros(3,1);
+        F = P - J * MInv * C * q_d1 - J * MInv * D - J * MInv * T;
+        % F = zeros(3,1);
         
         %calculate G
-        % G = J M^-1
-        G = zeros(3,3);
+        G = J * MInv;
+        % G = zeros(3,3);
 
         qch = [xch; ych; zch];
         qch_d1 = [xch_d1; ych_d1; zch_d1];
 
         % calculate errors: e and e'
         % for e' keep e_d1 notation
-        % e = qch - qchd;
-        % e' = qch' - qchd';
-        e = zeros(3,1);
-        e_d1 = zeros(3,1);
+        e = qch - qchd;
+        e_d1 = qch_d1 - qchd_d1;
+        % e = zeros(3,1);
+        % e_d1 = zeros(3,1);
 
         %calculate new input to the system v
         % v = qd'' - Kd e' - Kp e
-        v = zeros(3,1);
+        v = qchd_d2 - Kd * e_d1 - Kp * e;
+        % v = zeros(3,1);
 
         detG = det(G);
         % calculate inverse of G as below
         % Ginv = G^-1;
+        Ginv = inv(G);
 
         % calculate control input u
         % u = G^-1 * (v - F)
-        u = zeros(3,1);
+        u = Ginv * (v - F);
+        % u = zeros(3,1);
         
         % calculate state
         qr_d2 = MInv * (B * u - C * q_d1 - D - T);   

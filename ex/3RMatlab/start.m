@@ -138,3 +138,14 @@ disp('Starting ...');
     xlabel('Time [s]');
     ylabel('Velocity error [rad/s]');
     title('Joint velocity errors');
+
+    % Real vs desired trajectory in 3D
+    figure;
+    plot3(additional.k(1,:), additional.k(2,:), additional.k(3,:), ...
+          additional.qchd(1,:), additional.qchd(2,:), additional.qchd(3,:));
+    legend('Real', 'Desired');
+    xlabel('x [m]');
+    ylabel('y [m]');
+    zlabel('z [m]');
+    title('Real vs desired trajectory in joint space');
+    grid on;

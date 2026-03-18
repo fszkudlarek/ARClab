@@ -103,6 +103,38 @@ disp('Starting ...');
     sim_data.out_qr_d1 = youtput(:,1:3);
     sim_data.out_qr_d0 = youtput(:,4:6);
 
+    % Position and velocity plots
+    figure;
+    subplot(2,1,1);
+    plot(sim_data.time, sim_data.out_qr_d0(:,1), sim_data.time, sim_data.out_qr_d0(:,2), sim_data.time, sim_data.out_qr_d0(:,3));
+    legend('q_1', 'q_2', 'q_3');
+    xlabel('Time [s]');
+    ylabel('Position [rad]');
+    title('Joint positions');
 
+    subplot(2,1,2);
+    plot(sim_data.time, sim_data.out_qr_d1(:,1), sim_data.time, sim_data.out_qr_d1(:,2), sim_data.time, sim_data.out_qr_d1(:,3));
+    legend('dq_1', 'dq_2', 'dq_3');
+    xlabel('Time [s]');
+    ylabel('Velocity [rad/s]');
+    title('Joint velocities');
 
+    % Position and velocity error plots
+    figure;
+    subplot(2,1,1);
+    plot(sim_data.time, additional.k(1,:) - additional.qchd(1,:), ...
+         sim_data.time, additional.k(2,:) - additional.qchd(2,:), ...
+         sim_data.time, additional.k(3,:) - additional.qchd(3,:));
+    legend('e_{q_1}', 'e_{q_2}', 'e_{q_3}');
+    xlabel('Time [s]');
+    ylabel('Position error [rad]');
+    title('Joint position errors');
 
+    subplot(2,1,2);
+    plot(sim_data.time, sim_data.out_qr_d1(:,1)' - additional.qchd_d1(1,:), ...
+         sim_data.time, sim_data.out_qr_d1(:,2)' - additional.qchd_d1(2,:), ...
+         sim_data.time, sim_data.out_qr_d1(:,3)' - additional.qchd_d1(3,:));
+    legend('e_{dq_1}', 'e_{dq_2}', 'e_{dq_3}');
+    xlabel('Time [s]');
+    ylabel('Velocity error [rad/s]');
+    title('Joint velocity errors');

@@ -259,13 +259,13 @@ class SimulatorDynamics(Simulator):
         Kd = 20
         
         # TODO: calculate errors and theirs first derivative
-        eh = np.zeros((2))
-        eh_d1 = np.zeros((2))   
+        eh = h - hd
+        eh_d1 = h_d1 - hd_d1
         
         # TODO: introduce new input to the system
-        v = np.zeros((2))       
+        v = hd_d2 - Kp * eh - Kd * eh_d1    
         # TODO: calculate control signals
-        u = np.zeros((2))
+        u = Bhinv @ (Mh @ v + Ch @ h_d1)
         
         # TODO calculate h second derivative, h''(q)
         h_d2 = Mhinv @ (Bh @ u - Ch @ h_d1)

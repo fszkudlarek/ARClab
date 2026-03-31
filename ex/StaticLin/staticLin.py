@@ -339,13 +339,15 @@ class SimulatorKinematics(Simulator):
         detR = np.linalg.det(R)
         
         hd, hd_d1, _ = self._trajectory(t)
-        eh = np.zeros((2))
+        eh = h - hd
         
         # TODO: some calculations
+        Kp = 100.0
         
-        h_d1 = np.zeros((2))        
+        h_d1 = -Kp * eh
         k_d1 = np.zeros((5))
         
+        k_d1 = G @ R @ h_d1        
         h_d2 = np.array([0, 0])        
         new_state = np.concatenate([h_d1, h_d2, k_d1])
         

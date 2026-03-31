@@ -7,7 +7,7 @@ def main():
     start = np.array([0.1, 0.1, np.pi/2*0.1, 0, 0])
     dt = 0.01
     model = UnicycleModel(state=start, dt=dt)
-    simulator = SimulatorDynamics
+    simulator = SimulatorKinematics
     sim = simulator(model=model, dt=dt)
     model.state = start
     h = model.h

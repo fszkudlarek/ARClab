@@ -139,19 +139,13 @@ def trajectory_generator_square(t, dt=1):
         h_d2 = np.array([0, 0])
 
         one_period_time = 6.0/4.0
-        phase = 0
-        if t < one_period_time:
-            phase = 0
-        elif t < 2 * one_period_time:
-            phase = 1
-        elif t < 3 * one_period_time:
-            phase = 2
-        elif t <= 4 * one_period_time:
+        total_period = 4 * one_period_time
+        t_mod = t % total_period
+        phase = int(t_mod / one_period_time)
+        if phase > 3:
             phase = 3
-        # phase = int(t / dt)%4
-        print(phase)
 
-        z = t - one_period_time * phase
+        z = t_mod - one_period_time * phase
 
         x_selections = [0, 1, 0, -1]
         y_selections = [1, 0, -1, 0]

@@ -85,9 +85,8 @@ class Circle(Obstacle):
         self._center = center
 
     def distance(self, point: np.array):
-        # TODO calculate distance to the center of circular obstacle
-        distance = 0
-        return distance
+        diff = self._center - point[0:2]
+        return np.sqrt(np.dot(diff, diff))
     
     def _inside(self, point: np.array, radius):
         distance =  self.distance(point)
@@ -298,7 +297,7 @@ class MPC:
             # If the cost function is not dropping faster 
             # than some given value terminate calculation
             cost_diff = np.abs(previous_cost - result.fun)
-            if desired_trajectory is None and cost_diff < 0.01:
+            if desired_trajectory is None and cost_diff < 1e-4:
                 print("Early stop")
                 earlyStop = i
                 break
@@ -326,8 +325,10 @@ class MPC:
         steps = len(u) // m
         cost = 0
         
-        w_dist = 1.0
-        w_angle = 0.1
+        w_dist = 4.5
+        w_angle = 2.0
+        w_obs = 1.5
+        eps = 1e-3
 
         for i in range(0, steps):
             # 1. run step on the model with provided control signals
@@ -342,8 +343,9 @@ class MPC:
             cost += w_dist * distance + w_angle * np.abs(angle_diff)
 
             for obstacle in self._obstacles:
-                pass
-                # TODO: 4. evaluate possible collision with obstacles
+                collision, d = obstacle.inside_safe(state)
+                if collision:
+                    cost += w_obs / (d + eps)
                 
         return cost
     

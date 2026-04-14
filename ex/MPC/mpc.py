@@ -56,12 +56,12 @@ class MassDamperSpringModel(Model):
         self.k = k             # spring stiffness
     
     def step(self, u: np.array):
-        # TODO given current state (self._state) and control input u
-        # evaluate new state after time self._dt
-        # State: [x, x_dot]
-        # x_ddot = (u[0] - c*x_dot - k*x) / m_mass
-        # new_state = state + [x_dot, x_ddot] * dt
-        
+        # Mass-damper-spring: m*x'' + c*x' + k*x = u
+        # Euler integration
+        x = self._state[0]
+        x_dot = self._state[1]
+        x_ddot = (u[0] - self.c * x_dot - self.k * x) / self.m_mass
+        self._state = self._state + np.array([x_dot, x_ddot]) * self._dt
         return self._state
         
     @property
@@ -244,30 +244,24 @@ class MPC:
             result = minimize(cost_fn, u, method='SLSQP',
                 constraints=[], options={'ftol': 1e-3, 'disp': False},
                 bounds=bounds)
-            # TODO
             # 1. Append m first points from the optimization solution
-            # to the solution list
-            
-            
+            solution.append(result.x[:m])
+
             # 2. Update model's state with current state
-            
-            
-            # 3. Calculate next state of the model using step() method given 
-            # latest control signals (at the end of solution list
-            # which was updated in point 1).
-            
-            
+            self.model.state = state
+
+            # 3. Calculate next state of the model using step() method
+            state = self.model.step(solution[-1])
+
             # 4. Save new state as new point on path
-            # Append it to path list
-            
-            
+            path.append(state.copy())
+
             # 5. Preserve last vector of control input by
-            # removing first m values from optimization result and 
-            # assigning it to control input list u
-            
-            
-            # 6. Extend control input list with m  
-            # values, e.g. with m zeros
+            # removing first m values from optimization result
+            u = list(result.x[m:])
+
+            # 6. Extend control input list with m zeros
+            u.extend([0] * m)
             
             # Statistics
             if desired_trajectory is not None:
@@ -357,16 +351,18 @@ class MPC:
         steps = len(u) // m
         cost = 0
         for i in range(steps):
-            # TODO: 1. run step on the model providing control signals
-            
-            # TODO: 2. evaluate time at prediction step i
-            # t = self._current_time + (i + 1) * self.dt
-            
-            # TODO: 3. get desired position from self._desired_trajectory(t)
-            # and calculate tracking error (state[0] - desired)
-            
-            # TODO: 4. add squared error to cost
-            pass
+            # 1. Run step on the model providing control signals
+            state = self.model.step(u[i * m:(i + 1) * m])
+
+            # 2. Evaluate time at prediction step i
+            t = self._current_time + (i + 1) * self.dt
+
+            # 3. Get desired position and calculate tracking error
+            desired = self._desired_trajectory(t)
+            error = state[0] - desired
+
+            # 4. Add squared error to cost
+            cost += error ** 2
         return cost
     
     def plot(self, path: list, goal: np.array, dt: float, animationFile=''):

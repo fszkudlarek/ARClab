@@ -179,6 +179,38 @@ def trajectory_generator_circle(t, w=np.pi * 0.4, offset=0.2, A=1.0):
     h_d2 = np.array([-w*w*A*np.cos(t*w + offset), -w*w*A*np.sin(t*w + offset)])
     return h, h_d1, h_d2
 
+def trajectory_generator_eight(t, mi_1=0.2, mi_2=0.3):
+    if type(t) != np.ndarray:
+        total_period = 6.0
+        t_mod = t % total_period
+        half = total_period / 2
+        w = 2 * np.pi / half
+
+        if t_mod < half:
+            # First circle (right), center (mi_1, 0), radius mi_1
+            h = np.array([mi_1 * (1 - np.cos(w * t_mod)),
+                          mi_1 * np.sin(w * t_mod)])
+            h_d1 = np.array([w * mi_1 * np.sin(w * t_mod),
+                             w * mi_1 * np.cos(w * t_mod)])
+            h_d2 = np.array([w**2 * mi_1 * np.cos(w * t_mod),
+                             -w**2 * mi_1 * np.sin(w * t_mod)])
+        else:
+            # Second circle (left), center (-mi_2, 0), radius mi_2
+            h = np.array([-mi_2 * (1 - np.cos(w * t_mod)),
+                           mi_2 * np.sin(w * t_mod)])
+            h_d1 = np.array([-w * mi_2 * np.sin(w * t_mod),
+                              w * mi_2 * np.cos(w * t_mod)])
+            h_d2 = np.array([-w**2 * mi_2 * np.cos(w * t_mod),
+                             -w**2 * mi_2 * np.sin(w * t_mod)])
+    else:
+        h = np.zeros((2, len(t)))
+        h_d1 = np.zeros((2, len(t)))
+        h_d2 = np.zeros((2, len(t)))
+        for i in range(len(t)):
+            h[:,i], h_d1[:,i], h_d2[:,i] = trajectory_generator_eight(t[i])
+
+    return h, h_d1, h_d2
+
 
 class Simulator:
     __metaclass__ = ABCMeta

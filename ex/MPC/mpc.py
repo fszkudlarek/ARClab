@@ -19,11 +19,19 @@ class UnicycleModel(Model):
         self.L = L             # half of axle length
     
     def step(self, u: np.array):
-        # TODO given current state (self._state) and control inputs u
-        # evaluate new state after time self._dt
-        
+        # Unicycle kinematic model (lecture eq. 5):
+        # x' = v*cos(theta), y' = v*sin(theta), theta' = omega
+        # u = [v, omega]
+        v = u[0]
+        omega = u[1]
+        theta = self._state[2]
+        self._state = self._state + np.array([
+            v * np.cos(theta),
+            v * np.sin(theta),
+            omega,
+        ]) * self._dt
         return self._state
-        
+
     @property
     def m(self):
         return 2
@@ -318,19 +326,21 @@ class MPC:
         steps = len(u) // m
         cost = 0
         
+        w_dist = 1.0
+        w_angle = 0.1
+
         for i in range(0, steps):
-            # iterate new state of the model
-            # TODO: 1. run step on the model 
-            # providing control signals
-            
-            # calculate distance to the goal
-            # TODO: 2. calculate distance to goal based on 
-            # newly evaluated state, and evaluate angle difference 
-            # between current orientation and goal orientation
-            
-            # TODO: 3. using the distance to goal 
-            # calculate cost and add it to overall 'cost'
-            
+            # 1. run step on the model with provided control signals
+            state = self.model.step(u[i * m:(i + 1) * m])
+
+            # 2. distance to goal and angle difference
+            diff = state[0:2] - self._goal[0:2]
+            distance = np.sqrt(np.dot(diff, diff))
+            angle_diff = state[2] - self._goal[2]
+
+            # 3. add weighted distance and |angle| to cost
+            cost += w_dist * distance + w_angle * np.abs(angle_diff)
+
             for obstacle in self._obstacles:
                 pass
                 # TODO: 4. evaluate possible collision with obstacles

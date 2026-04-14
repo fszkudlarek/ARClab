@@ -42,6 +42,6 @@ def main_mds():
     mpc.plot_mds(path, stats, desired_trajectory=desired_trajectory)
     
 if __name__ == "__main__":
-    # main()
-    main_mds()
+    main()
+    # main_mds()
 

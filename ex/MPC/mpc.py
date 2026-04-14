@@ -326,9 +326,9 @@ class MPC:
         cost = 0
         
         w_dist = 4.5
-        w_angle = 2.0
-        w_obs = 1.5
-        eps = 1e-3
+        w_angle = 1.0
+        w_obs = 7.0
+        k_obs = 15.0
 
         for i in range(0, steps):
             # 1. run step on the model with provided control signals
@@ -343,9 +343,9 @@ class MPC:
             cost += w_dist * distance + w_angle * np.abs(angle_diff)
 
             for obstacle in self._obstacles:
-                collision, d = obstacle.inside_safe(state)
-                if collision:
-                    cost += w_obs / (d + eps)
+                _, d = obstacle.inside_safe(state)
+                r_safe = getattr(obstacle, 'radius_safe', obstacle.safe_margin)
+                cost += w_obs * (1.0 - np.tanh(k_obs * (d - r_safe)))
                 
         return cost
     

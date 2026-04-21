@@ -44,9 +44,17 @@ class AckermanModel(Model):
         self.l = l             # wheel base
     
     def step(self, u: np.array):
-        # TODO given current state (self._state) and control inputs u
-        # evaluate new state after time self._dt
-        
+        # Ackerman (bicycle) kinematic model:
+        # x' = v*cos(theta), y' = v*sin(theta), theta' = v/l * tan(phi)
+        # u = [v, phi] where phi is steering angle
+        v = u[0]
+        phi = u[1]
+        theta = self._state[2]
+        self._state = self._state + np.array([
+            v * np.cos(theta),
+            v * np.sin(theta),
+            v / self.l * np.tan(phi),
+        ]) * self._dt
         return self._state
         
     @property
@@ -153,12 +161,19 @@ class Rectangle(Obstacle):
     
     def _inside(self, point: np.array, margin = 0):
         distance =  self.distance(point)
-        
-        # TODO
-        # check if there is collision with the rectangle
-        # for this you can use points, center of the rectangle 
-        # or other technique
 
+        # Transform point into rectangle's local frame (rotate by -orientation)
+        dx = point[0] - self._center[0]
+        dy = point[1] - self._center[1]
+        cos_a = np.cos(-self._orientationRad)
+        sin_a = np.sin(-self._orientationRad)
+        local_x = dx * cos_a - dy * sin_a
+        local_y = dx * sin_a + dy * cos_a
+
+        half_w = self._width / 2 + margin
+        half_h = self._height / 2 + margin
+        if np.abs(local_x) <= half_w and np.abs(local_y) <= half_h:
+            return True, distance
         return False, distance
     
     def inside(self, point: np.array):
@@ -183,8 +198,16 @@ class Rectangle(Obstacle):
         return self._height
     
     @property
+    def radius_safe(self):
+        # Conservative bounding radius (circumscribed) including safety margin,
+        # used by the tanh obstacle cost.
+        half_w = self._width / 2 + self._safe_margin
+        half_h = self._height / 2 + self._safe_margin
+        return np.sqrt(half_w * half_w + half_h * half_h)
+
+    @property
     def orientationDeg(self):
-        return self._orientationRad * 180 / np.pi  
+        return self._orientationRad * 180 / np.pi
     
     @property
     def orientationRad(self):
@@ -327,8 +350,8 @@ class MPC:
         
         w_dist = 4.5
         w_angle = 1.0
-        w_obs = 7.0
-        k_obs = 15.0
+        w_obs = 3.0
+        k_obs = 5.0
 
         for i in range(0, steps):
             # 1. run step on the model with provided control signals

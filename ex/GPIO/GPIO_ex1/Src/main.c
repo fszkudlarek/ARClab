@@ -130,6 +130,7 @@ int main(void) {
 		status = HAL_GPIO_ReadPin(TIMER5_GPIO_Port, TIMER5_Pin);
 
 		printf("Current state of button is %d, (%d)\r\n", status, counter);
+		printf("Hello from 263437\r\n");
 
 		HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
 		HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);

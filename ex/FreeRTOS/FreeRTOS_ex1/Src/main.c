@@ -26,8 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 // --> include all necessary headers for
+#include "stdio.h"
 // printf() redirection
 // FreeRTOS related headers
 /* USER CODE END Includes */

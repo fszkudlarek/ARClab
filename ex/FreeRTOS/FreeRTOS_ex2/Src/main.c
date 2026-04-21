@@ -27,10 +27,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 // --> include all necessary headers for
 // printf() redirection
+#include "stdio.h"
+
 // FreeRTOS related headers
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

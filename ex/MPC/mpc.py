@@ -119,10 +119,9 @@ class Circle(Obstacle):
     def radius(self):
         return self._radius
     
-    @property
-    def radius_safe(self):
+    def radius_safe(self, point: np.array = None):
         return self._radius + self._safe_margin
-    
+
 class Rectangle(Obstacle):
     
     def __init__(self, center: np.array, width=1, height=0.5, orientationDeg = 0, **kwargs) -> None:
@@ -178,10 +177,10 @@ class Rectangle(Obstacle):
     
     def inside(self, point: np.array):
         return self._inside(point)
-    
+
     def inside_safe(self, point: np.array):
-        return self._inside(point, self._safe_margin)
-    
+        return self._inside(point, self._safe_margin / 2)
+
     def plotType(self):
         return "rectangle"
     
@@ -197,13 +196,29 @@ class Rectangle(Obstacle):
     def height(self):
         return self._height
     
-    @property
-    def radius_safe(self):
-        # Conservative bounding radius (circumscribed) including safety margin,
-        # used by the tanh obstacle cost.
+    def radius_safe(self, point: np.array):
+        # Direction-aware safe radius: distance from the rectangle center to
+        # the expanded boundary along the ray pointing at `point`, computed in
+        # the rectangle's local frame (same transform as _inside).
+        dx = point[0] - self._center[0]
+        dy = point[1] - self._center[1]
+        cos_a = np.cos(-self._orientationRad)
+        sin_a = np.sin(-self._orientationRad)
+        local_x = dx * cos_a - dy * sin_a
+        local_y = dx * sin_a + dy * cos_a
+
         half_w = self._width / 2 + self._safe_margin
         half_h = self._height / 2 + self._safe_margin
-        return np.sqrt(half_w * half_w + half_h * half_h)
+
+        abs_x = np.abs(local_x)
+        abs_y = np.abs(local_y)
+        if abs_x < 1e-9 and abs_y < 1e-9:
+            return np.sqrt(half_w * half_w + half_h * half_h)
+
+        t_x = half_w / abs_x if abs_x > 1e-9 else np.inf
+        t_y = half_h / abs_y if abs_y > 1e-9 else np.inf
+        t = min(t_x, t_y)
+        return t * np.sqrt(local_x * local_x + local_y * local_y)
 
     @property
     def orientationDeg(self):
@@ -349,9 +364,9 @@ class MPC:
         cost = 0
         
         w_dist = 4.5
-        w_angle = 1.0
-        w_obs = 3.0
-        k_obs = 5.0
+        w_angle = 0.0
+        w_obs = 0.9
+        k_obs = 10.0
 
         for i in range(0, steps):
             # 1. run step on the model with provided control signals
@@ -367,7 +382,7 @@ class MPC:
 
             for obstacle in self._obstacles:
                 _, d = obstacle.inside_safe(state)
-                r_safe = getattr(obstacle, 'radius_safe', obstacle.safe_margin)
+                r_safe = obstacle.radius_safe(state)
                 cost += w_obs * (1.0 - np.tanh(k_obs * (d - r_safe)))
                 
         return cost

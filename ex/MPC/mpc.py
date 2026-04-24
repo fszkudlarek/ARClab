@@ -266,9 +266,14 @@ class MPC:
         
         if desired_trajectory is not None:
             cost_fn = self.cost_trajectory
-            bounds = Bounds([-10]*n, [10]*n)
+            desired0 = np.atleast_1d(np.asarray(desired_trajectory(0.0), dtype=float))
+            if m == 1:
+                bounds = Bounds([-10]*n, [10]*n)
+            else:
+                bounds = Bounds([-1, -0.5]*int(n//m), [1, 0.5]*int(n//m))
+            err0 = float(np.linalg.norm(np.asarray(start[:desired0.size], dtype=float) - desired0))
             stats = {'step': [0], 'robot': [start.copy()], 'dt': self.dt,
-                     'error': [start[0] - desired_trajectory(0)],
+                     'error': [err0],
                      'cost': [0]}
         else:
             self._goal = goal
@@ -311,14 +316,16 @@ class MPC:
             # Statistics
             if desired_trajectory is not None:
                 self._current_time += self.dt
-                desired = desired_trajectory(self._current_time)
-                error = state[0] - desired
+                desired = np.atleast_1d(np.asarray(desired_trajectory(self._current_time), dtype=float))
+                err_vec = np.asarray(state[:desired.size], dtype=float) - desired
+                error = float(np.linalg.norm(err_vec))
                 stats['step'].append(i)
                 stats['cost'].append(result.fun)
                 stats['robot'].append(state.copy())
                 stats['error'].append(error)
                 print(f"t: {self._current_time:.2f}, Step {i:05d}, cost {result.fun:.4f}, "
-                      f"x: {state[0]:.4f}, desired: {desired:.4f}, error: {error:.4f}")
+                      f"state: {np.array2string(np.asarray(state[:desired.size]), precision=3)}, "
+                      f"desired: {np.array2string(desired, precision=3)}, error: {error:.4f}")
             else:
                 diff = state[0:2] - goal[0:2]
                 distance = np.sqrt(np.dot(diff, diff))
@@ -388,7 +395,10 @@ class MPC:
         return cost
     
     def cost_trajectory(self, u: np.array) -> float:
-        """Calculates cost function for trajectory tracking
+        """Calculates cost function for trajectory tracking.
+
+        Works for any desired_trajectory(t) returning a scalar or a vector;
+        the first len(desired) state components are compared against it.
 
         Args:
             u (np.array): Control signals
@@ -399,20 +409,19 @@ class MPC:
         self.model.state = self.model_state
         m = self.model.m
         steps = len(u) // m
-        cost = 0
+        cost = 0.0
+
+        w_pos = 2.0    # tracking error weight
+        w_u = 1.0      # control effort weight
+
         for i in range(steps):
-            # 1. Run step on the model providing control signals
-            state = self.model.step(u[i * m:(i + 1) * m])
-
-            # 2. Evaluate time at prediction step i
+            u_i = np.asarray(u[i * m:(i + 1) * m], dtype=float)
+            state = self.model.step(u_i)
             t = self._current_time + (i + 1) * self.dt
-
-            # 3. Get desired position and calculate tracking error
-            desired = self._desired_trajectory(t)
-            error = state[0] - desired
-
-            # 4. Add squared error to cost
-            cost += error ** 2
+            desired = np.atleast_1d(np.asarray(self._desired_trajectory(t), dtype=float))
+            error = state[:desired.size] - desired
+            cost += w_pos * float(np.dot(error, error))
+            cost += w_u * float(np.dot(u_i, u_i))
         return cost
     
     def plot(self, path: list, goal: np.array, dt: float, animationFile=''):
@@ -584,7 +593,70 @@ class MPC:
             axes[2].legend()
         axes[2].set_xlabel('Time [s]')
         axes[2].grid(True)
-        
+
         plt.tight_layout()
         plt.show()
-            
+
+    def plot_trajectory(self, path: list, desired_trajectory, dt: float, animationFile=''):
+        """Animate robot following a 2D desired_trajectory(t) -> (x, y[, ...])."""
+        path = np.array(path)
+        frames = path.shape[0]
+        t_vals = np.array([i * self.dt for i in range(frames)])
+        ref = np.array([np.atleast_1d(np.asarray(desired_trajectory(t), dtype=float))[:2]
+                        for t in t_vals])
+
+        fig, ax = plt.subplots()
+        ax.plot(ref[:, 0], ref[:, 1], 'r--', label='Desired')
+        line_path, = ax.plot([], [], 'bo', label='Actual')
+        line_vector = ax.quiver([0], [0], [0], [0], angles='xy', scale=1, scale_units='xy')
+        line_stats = ax.text(0.02, 0.98, "", transform=ax.transAxes, va='top')
+
+        all_x = np.concatenate([path[:, 0], ref[:, 0]])
+        all_y = np.concatenate([path[:, 1], ref[:, 1]])
+        ax.set_xlim(all_x.min() - 1, all_x.max() + 1)
+        ax.set_ylim(all_y.min() - 1, all_y.max() + 1)
+        ax.set_aspect('equal')
+        ax.grid('both')
+        ax.legend(loc='lower right')
+
+        for obstacle in self._obstacles:
+            if obstacle.plotType() == "circle":
+                ax.add_patch(plt.Circle(obstacle.center, obstacle.radius + obstacle.safe_margin, color='pink'))
+                ax.add_patch(plt.Circle(obstacle.center, obstacle.radius, color='red'))
+            elif obstacle.plotType() == "rectangle":
+                ax.add_patch(plt.Rectangle(obstacle.get_bottom_left_margin(),
+                                           obstacle.width + obstacle.safe_margin,
+                                           obstacle.height + obstacle.safe_margin,
+                                           angle=obstacle.orientationDeg, color='pink'))
+                ax.add_patch(plt.Rectangle(obstacle.get_bottom_left(),
+                                           obstacle.width, obstacle.height,
+                                           angle=obstacle.orientationDeg, color='red'))
+
+        data = {'xs': [], 'ys': []}
+
+        def update(frame):
+            frame = int(frame)
+            if frame == 0:
+                data['xs'].clear()
+                data['ys'].clear()
+            data['xs'].append(path[frame, 0])
+            data['ys'].append(path[frame, 1])
+            line_path.set_data(data['xs'], data['ys'])
+
+            point = path[frame, 0:2]
+            point2 = path[frame + 1, 0:2] if frame < frames - 1 else point
+            scale = (point2 - point) * 4
+            line_vector.set_offsets(point)
+            line_vector.set_UVC([scale[0]], [scale[1]])
+
+            err = float(np.linalg.norm(point - ref[frame]))
+            line_stats.set_text(f"Step: {frame}\nError: {err:.3f}")
+            return line_path, line_vector, line_stats
+
+        repeat = not animationFile
+        animation = FuncAnimation(fig, update,
+                                  frames=np.linspace(0, frames - 1, frames),
+                                  blit=True, interval=dt, repeat=repeat)
+        if animationFile:
+            animation.save(animationFile, fps=1)
+        plt.show()

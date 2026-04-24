@@ -16,7 +16,7 @@ def main():
     obstacles = []
     # TODO obstacles
     # obstacles.append(Circle(np.array([1.2, 0.2]), radius=0.1, safe_margin=0.2))
-    obstacles.append(Rectangle(np.array([1.2, 0.2]), width=0.5, height=0.5, orientationDeg=45, safe_margin=0.2))
+    # obstacles.append(Rectangle(np.array([1.2, 0.2]), width=0.5, height=0.5, orientationDeg=45, safe_margin=0.2))
     solution, path, stats = mpc.run(start, goal, obstacles=obstacles)
     
     print("Solution")
@@ -39,8 +39,28 @@ def main_mds():
     solution, path, stats = mpc.run(start, desired_trajectory=desired_trajectory, maxiter=200)
     print("Plotting")
     mpc.plot_mds(path, stats, desired_trajectory=desired_trajectory)
-    
+
+# Circle reference for the mobile robot
+CIRCLE_RADIUS = 1.0
+CIRCLE_OMEGA = 0.3
+CIRCLE_CENTER = np.array([0.0, 0.0])
+
+def circle_trajectory(t):
+    return CIRCLE_CENTER + CIRCLE_RADIUS * np.array([np.cos(CIRCLE_OMEGA * t),
+                                                     np.sin(CIRCLE_OMEGA * t)])
+
+def main_circle():
+    start = np.array([1.5, 0.0, np.pi / 2])
+    dt = 0.2
+    model = AckermanModel(start.copy(), dt, 0.06)
+    mpc = MPC(model, T=2.0, dt=dt)
+    print("Calculating circle trajectory")
+    solution, path, stats = mpc.run(start, desired_trajectory=circle_trajectory, maxiter=150)
+    print("Plotting")
+    mpc.plot_trajectory(path, circle_trajectory, dt * 1000)
+
 if __name__ == "__main__":
-    main()
+    # main()
     # main_mds()
+    main_circle()
 

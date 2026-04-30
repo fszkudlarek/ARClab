@@ -77,11 +77,15 @@ SemaphoreHandle_t mutex;
 void measureTask(void *args) {
 
 	for (;;) {
-		xSemaphoreTake(mutex, portMAX_DELAY);
-		HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-		measurement = HAL_ADC_GetValue(&hadc1);
-		xSemaphoreGive(mutex);
-		vTaskDelay(pdMS_TO_TICKS(100));
+        HAL_ADC_Start(&hadc1);
+        HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+        uint16_t v = HAL_ADC_GetValue(&hadc1);
+
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        measurement = v;
+        xSemaphoreGive(mutex);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
 
@@ -89,10 +93,11 @@ void commTask(void *args) {
 
 	for (;;) {
 		xSemaphoreTake(mutex, portMAX_DELAY);
-		printf("ADC1: %u, TIM1 ticks: %lu\r\n",
-			measurement, HAL_GetTick());
-		xSemaphoreGive(mutex);
-		vTaskDelay(pdMS_TO_TICKS(500));
+        uint16_t v = measurement;
+        xSemaphoreGive(mutex);
+
+        printf("[ex2]:	ADC1: %u, TIM1 ticks: %lu\r\n", v, HAL_GetTick());
+        vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
 
@@ -154,15 +159,13 @@ int main(void) {
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
-		printf("Tak\n\r");
-
 
 		HAL_Delay(1000);
 		HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
 		HAL_ADC_Start(&hadc1);
 		HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 		measurement = HAL_ADC_GetValue(&hadc1);
-		printf("ADC1: %u, TIM1 ticks: %lu\r\n",
+		printf("[ex1]:	ADC1: %u, TIM1 ticks: %lu\r\n",
 				measurement, HAL_GetTick());
 
 		/* USER CODE END WHILE */

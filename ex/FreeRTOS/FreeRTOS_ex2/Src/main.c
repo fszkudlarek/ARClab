@@ -19,8 +19,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "FreeRTOSConfig.h"
 #include "adc.h"
 #include "dma.h"
+#include "stm32l4xx_hal.h"
+#include "stm32l4xx_hal_adc.h"
+#include "stm32l4xx_hal_tim.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -35,6 +39,7 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,6 +71,11 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+int _write(int file, char *ptr, int len) {
+	HAL_UART_Transmit(&huart2, (uint8_t *) ptr, len, 50);
+	return len;
+}
 
 enum QueueStatus {
 	QueueOK, QueueWriteProblem, QueueEmpty, QueueCantRead
@@ -144,20 +154,32 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 	// --> start TIM1 to generate PWM signal on TIMER3 connector
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
 	// --> start TIM6 in interrupt
+  HAL_TIM_Base_Start(&htim6);
 	// --> start ADC1 in DMA mode
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *) &measurement, 1);
 	// --> create a mutex
+  // mutex = xSemaphoreCreateMutex();
 	// --> create a queue
+  // queue = xQueueCreate(uxQueueLength, uxItemSize);
 	// --> create all necessary tasks
 	printf("Starting!\r\n");
+  // xTaskCreate(measureTask, "measure", configMINIMAL_STACK_SIZE,
+	// 		NULL, tskIDLE_PRIORITY + 2, NULL);
+	// xTaskCreate(commTask, "comm", configMINIMAL_STACK_SIZE * 4,
+	// 		NULL, tskIDLE_PRIORITY + 1, NULL);
 
 	// --> start FreeRTOS scheduler
-
+  // vTaskStartScheduler();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+    uint16_t local_measurement = HAL_ADC_GetValue(&hadc1);
+    printf("Measured value: %4u, time: %7lu\r\n", local_measurement, HAL_GetTick());
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -34,12 +34,13 @@
 // --> include all necessary headers for
 // printf() redirection
 #include "stdio.h"
+#include <stdint.h>
 
 // FreeRTOS related headers
 #include "FreeRTOS.h"
-#include "semphr.h"
 #include "task.h"
-#include <stdint.h>
+#include "semphr.h"
+#include "queue.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,12 +93,25 @@ QueueHandle_t queue;
 
 void measureTask(void *args) {
 	TickType_t xLastWakeTime;
+  uint16_t measurement_local = 0;
 	BaseType_t xStatus;
 
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
-
+    measurement_local = HAL_ADC_GetValue(&hadc1);
+    xStatus = xQueueSend(queue, &measurement_local, portMAX_DELAY);
+    if(xStatus == pdPASS) {
+      xSemaphoreTake(mutex, portMAX_DELAY);
+      queueError = QueueOK;
+      xSemaphoreGive(mutex);
+    }
+    else {
+      xSemaphoreTake(mutex, portMAX_DELAY);
+      queueError = QueueWriteProblem;
+      xSemaphoreGive(mutex);
+    }
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(300));
 	}
 }
 
@@ -105,14 +119,47 @@ void commTask(void *args) {
 	TickType_t xLastWakeTime;
 	uint16_t measurement_local = 0;
 	uint16_t flag_local;
-	uint16_t histeresis = 0;
+	uint16_t histeresis = 500;
 	BaseType_t queue_size;
 	BaseType_t xStatus;
 
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
+    queue_size = uxQueueMessagesWaiting(queue);
+    if(queue_size > 12) {
+      histeresis = 100;
+    }
+    else if (queue_size == 0) {
+      xSemaphoreTake(mutex, portMAX_DELAY);
+      queueError = QueueEmpty;
+      xSemaphoreGive(mutex);
+    }
+    else if (queue_size < 4) {
+      histeresis = 500;
+    }
 
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    flag_local = queueError;
+    xSemaphoreGive(mutex);
+
+    xStatus = xQueueReceive(queue, &measurement_local, portMAX_DELAY);
+    if(xStatus == pdPASS && flag_local == QueueOK) {
+      xSemaphoreTake(mutex, portMAX_DELAY);
+      queueError = QueueOK;
+      xSemaphoreGive(mutex);
+    }
+    else {
+      xSemaphoreTake(mutex, portMAX_DELAY);
+      queueError = QueueCantRead;
+      xSemaphoreGive(mutex);
+    }
+
+
+    printf("Measured value: %4u, time: %7lu, queue size %2lu, error %u\r\n",
+      measurement_local, HAL_GetTick(), queue_size, flag_local);
+
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(histeresis));
 	}
 }
 
@@ -156,22 +203,22 @@ int main(void)
 	// --> start TIM1 to generate PWM signal on TIMER3 connector
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
 	// --> start TIM6 in interrupt
-  HAL_TIM_Base_Start(&htim6);
+  HAL_TIM_Base_Start_IT(&htim6);
 	// --> start ADC1 in DMA mode
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) &measurement, 1);
 	// --> create a mutex
-  // mutex = xSemaphoreCreateMutex();
+  mutex = xSemaphoreCreateMutex();
 	// --> create a queue
-  // queue = xQueueCreate(uxQueueLength, uxItemSize);
+  queue = xQueueCreate(15, sizeof(uint16_t));
 	// --> create all necessary tasks
 	printf("Starting!\r\n");
-  // xTaskCreate(measureTask, "measure", configMINIMAL_STACK_SIZE,
-	// 		NULL, tskIDLE_PRIORITY + 2, NULL);
-	// xTaskCreate(commTask, "comm", configMINIMAL_STACK_SIZE * 4,
-	// 		NULL, tskIDLE_PRIORITY + 1, NULL);
+  xTaskCreate(measureTask, "measure", configMINIMAL_STACK_SIZE,
+			NULL, tskIDLE_PRIORITY + 1, NULL);
+	xTaskCreate(commTask, "comm", configMINIMAL_STACK_SIZE * 4,
+			NULL, tskIDLE_PRIORITY + 2, NULL);
 
 	// --> start FreeRTOS scheduler
-  // vTaskStartScheduler();
+  vTaskStartScheduler();
   /* USER CODE END 2 */
 
   /* Infinite loop */

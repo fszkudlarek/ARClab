@@ -45,6 +45,10 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct {
+  uint16_t measurement;
+	uint32_t counter;
+} queue_data_t;
 
 /* USER CODE END PTD */
 
@@ -98,20 +102,26 @@ void measureTask(void *args) {
 
 	xLastWakeTime = xTaskGetTickCount();
 
+  uint32_t counter_local = 0;
+
 	for (;;) {
     measurement_local = HAL_ADC_GetValue(&hadc1);
-    xStatus = xQueueSend(queue, &measurement_local, portMAX_DELAY);
-    if(xStatus == pdPASS) {
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      queueError = QueueOK;
-      xSemaphoreGive(mutex);
-    }
-    else {
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      queueError = QueueWriteProblem;
-      xSemaphoreGive(mutex);
-    }
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(300));
+    queue_data_t local_queue_data;
+    local_queue_data.measurement = measurement_local;
+    local_queue_data.counter = counter_local;
+    xStatus = xQueueOverwrite(queue, &local_queue_data);
+    // if(xStatus == pdPASS) {
+    //   xSemaphoreTake(mutex, portMAX_DELAY);
+    //   queueError = QueueOK;
+    //   xSemaphoreGive(mutex);
+    // }
+    // else {
+    //   xSemaphoreTake(mutex, portMAX_DELAY);
+    //   queueError = QueueWriteProblem;
+    //   xSemaphoreGive(mutex);
+    // }
+    ++counter_local;
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000));
 	}
 }
 
@@ -123,43 +133,28 @@ void commTask(void *args) {
 	BaseType_t queue_size;
 	BaseType_t xStatus;
 
+  uint32_t last_counter_value = 1000;
+  queue_data_t local_queue_data;
+
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
-    queue_size = uxQueueMessagesWaiting(queue);
-    if(queue_size > 12) {
-      histeresis = 100;
-    }
-    else if (queue_size == 0) {
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      queueError = QueueEmpty;
-      xSemaphoreGive(mutex);
-    }
-    else if (queue_size < 4) {
-      histeresis = 500;
-    }
-
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    flag_local = queueError;
-    xSemaphoreGive(mutex);
-
-    xStatus = xQueueReceive(queue, &measurement_local, portMAX_DELAY);
-    if(xStatus == pdPASS && flag_local == QueueOK) {
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      queueError = QueueOK;
-      xSemaphoreGive(mutex);
+    xStatus = xQueuePeek(queue, &local_queue_data, 0);
+    if(xStatus == pdPASS) {
+      if(local_queue_data.counter != last_counter_value) {
+        last_counter_value = local_queue_data.counter;
+        printf("time: %6lu, measured value: %4u, counter: %4lu\r\n",
+          HAL_GetTick(), local_queue_data.measurement, local_queue_data.counter);
+      }
+      else {
+        printf("No new data\r\n");
+      }
     }
     else {
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      queueError = QueueCantRead;
-      xSemaphoreGive(mutex);
+      printf("Queue empty\r\n");
     }
 
-
-    printf("Measured value: %4u, time: %7lu, queue size %2lu, error %u\r\n",
-      measurement_local, HAL_GetTick(), queue_size, flag_local);
-
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(histeresis));
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(400));
 	}
 }
 
@@ -209,7 +204,7 @@ int main(void)
 	// --> create a mutex
   mutex = xSemaphoreCreateMutex();
 	// --> create a queue
-  queue = xQueueCreate(15, sizeof(uint16_t));
+  queue = xQueueCreate(1, sizeof(queue_data_t));
 	// --> create all necessary tasks
 	printf("Starting!\r\n");
   xTaskCreate(measureTask, "measure", configMINIMAL_STACK_SIZE,

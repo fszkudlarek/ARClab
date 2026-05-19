@@ -98,7 +98,6 @@ QueueHandle_t queue;
 void measureTask(void *args) {
 	TickType_t xLastWakeTime;
   uint16_t measurement_local = 0;
-	BaseType_t xStatus;
 
 	xLastWakeTime = xTaskGetTickCount();
 
@@ -106,31 +105,21 @@ void measureTask(void *args) {
 
 	for (;;) {
     measurement_local = HAL_ADC_GetValue(&hadc1);
+
     queue_data_t local_queue_data;
     local_queue_data.measurement = measurement_local;
     local_queue_data.counter = counter_local;
-    xStatus = xQueueOverwrite(queue, &local_queue_data);
-    // if(xStatus == pdPASS) {
-    //   xSemaphoreTake(mutex, portMAX_DELAY);
-    //   queueError = QueueOK;
-    //   xSemaphoreGive(mutex);
-    // }
-    // else {
-    //   xSemaphoreTake(mutex, portMAX_DELAY);
-    //   queueError = QueueWriteProblem;
-    //   xSemaphoreGive(mutex);
-    // }
+
+    xQueueOverwrite(queue, &local_queue_data);
+
     ++counter_local;
+
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000));
 	}
 }
 
 void commTask(void *args) {
 	TickType_t xLastWakeTime;
-	uint16_t measurement_local = 0;
-	uint16_t flag_local;
-	uint16_t histeresis = 500;
-	BaseType_t queue_size;
 	BaseType_t xStatus;
 
   uint32_t last_counter_value = 1000;

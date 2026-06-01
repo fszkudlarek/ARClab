@@ -30,6 +30,7 @@
 
 // --> include all necessary headers for
 // printf() redirection
+#include "stdio.h"
 // FreeRTOS related headers
 #include "pid.h"
 
@@ -64,6 +65,10 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int _write(int file, char *ptr, int len) {
+	HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, 50);
+	return len;
+}
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 

@@ -52,12 +52,12 @@
 // PID gains
 #define PID_KP   2.0f
 #define PID_KI   8.0f
-#define PID_KD   0.0f
+#define PID_KD   0.1f
 #define PID_DT   0.02f   // control loop period: 50 Hz -> 0.02 s
 
-// desired value range [0, 4000], selected by keys '0'..'8' (step 500)
-#define DV_STEP  500
-#define DV_MAX   4000
+// desired value range [0, 4095], selected by keys '0'..'9'
+#define DV_STEP  4095/9
+#define DV_MAX   4095
 
 // DAC is 12-bit -> control signal range [0, 4095]
 #define CS_MAX   4095.0f
@@ -203,7 +203,7 @@ void userTask(void *args) {
 
 	for (;;) {
 		while (xQueueReceive(uartQueue, &c, 0) == pdTRUE) {
-			if (c >= '0' && c <= '8') {
+			if (c >= '0' && c <= '9') {
 				uint16_t newDv = (uint16_t) (c - '0') * DV_STEP;
 				if (newDv > DV_MAX) {
 					newDv = DV_MAX;

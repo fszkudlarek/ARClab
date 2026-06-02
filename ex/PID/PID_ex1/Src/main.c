@@ -37,6 +37,7 @@
 #include "semphr.h"
 #include "queue.h"
 #include "pid.h"
+#include <stdint.h>
 
 /* USER CODE END Includes */
 
@@ -52,7 +53,7 @@
 #define PID_KP   2.0f
 #define PID_KI   8.0f
 #define PID_KD   0.0f
-#define PID_DT   0.01f   // control loop period: 100 Hz -> 0.01 s
+#define PID_DT   0.02f   // control loop period: 50 Hz -> 0.02 s
 
 // desired value range [0, 4000], selected by keys '0'..'8' (step 500)
 #define DV_STEP  500
@@ -101,6 +102,11 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
+int16_t convert_to_mV(int16_t value) {
+	int16_t value_mV = 1000 * value * 3.3 / CS_MAX;
+	return value_mV;
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 	if (hadc->Instance == ADC1) {
 		BaseType_t hpw = pdFALSE;
@@ -136,7 +142,7 @@ void measureTask(void *args) {
 		mv = v;
 		xSemaphoreGive(mutex);
 
-		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10));
+		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
 	}
 }
 
@@ -160,7 +166,7 @@ void controlTask(void *args) {
 		cs = csLocal;
 		xSemaphoreGive(mutex);
 
-		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10));
+		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
 	}
 }
 
@@ -175,10 +181,17 @@ void commTask(void *args) {
 		uint16_t dvLocal = dv;
 		uint16_t csLocal = cs;
 		xSemaphoreGive(mutex);
+		int16_t errorLocal = dvLocal - mvLocal;
 
-		printf("mv: %4u, dv: %4u, cs: %4u\r\n", mvLocal, dvLocal, csLocal);
+		int16_t mvLocal_mV = convert_to_mV(mvLocal);
+		int16_t dvLocal_mV = convert_to_mV(dvLocal);
+		int16_t csLocal_mV = convert_to_mV(csLocal);
+		int16_t errorLocal_mV = convert_to_mV(errorLocal);
 
-		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(500));
+
+		printf("%4d;%4d;%4d;%4d\r\n", mvLocal_mV, dvLocal_mV, errorLocal_mV, csLocal_mV);
+
+		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200));
 	}
 }
 

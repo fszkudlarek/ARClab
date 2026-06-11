@@ -78,6 +78,11 @@ uint16_t mv = 0;   // measured value
 uint16_t dv = 0;   // desired value
 uint16_t cs = 0;   // control signal
 
+// sinus parameters
+float a = 0.5;
+float b = 0.1;
+float c = 0;
+
 // PID controller instance
 PID_t pid;
 
@@ -197,19 +202,61 @@ void commTask(void *args) {
 
 void userTask(void *args) {
 	TickType_t xLastWakeTime;
-	uint8_t c;
+	uint8_t character;
 
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
-		while (xQueueReceive(uartQueue, &c, 0) == pdTRUE) {
-			if (c >= '0' && c <= '9') {
-				uint16_t newDv = (uint16_t) (c - '0') * DV_STEP;
-				if (newDv > DV_MAX) {
-					newDv = DV_MAX;
+		while (xQueueReceive(uartQueue, &character, 0) == pdTRUE) {			
+			if (character >= '0' && character <= '2') {
+				float a_local;
+				switch (character) {
+					case '0':
+						a_local = 0.5;
+						break;
+					case '1':
+						a_local = 1.0;
+						break;
+					case '2':
+						a_local = 2.0;
+						break;
 				}
 				xSemaphoreTake(mutex, portMAX_DELAY);
-				dv = newDv;
+				a = a_local;
+				xSemaphoreGive(mutex);
+			}
+			if (character >= 'a' && character <= 'c') {
+				float b_local;
+				switch (character) {
+					case 'a':
+						b_local = 0.1;
+						break;
+					case 'b':
+						b_local = 0.5;
+						break;
+					case 'c':
+						b_local = 0.8;
+						break;
+				}
+				xSemaphoreTake(mutex, portMAX_DELAY);
+				b = b_local;
+				xSemaphoreGive(mutex);
+			}
+			if (character >= 'x' && character <= 'z') {
+				float c_local;
+				switch (character) {
+					case 'x':
+						c_local = 0.0;
+						break;
+					case 'y':
+						c_local = 1.0;
+						break;
+					case 'z':
+						c_local = 1.65;
+						break;
+				}
+				xSemaphoreTake(mutex, portMAX_DELAY);
+				c = c_local;
 				xSemaphoreGive(mutex);
 			}
 		}

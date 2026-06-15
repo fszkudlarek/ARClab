@@ -37,6 +37,7 @@
 #include "semphr.h"
 #include "queue.h"
 #include "pid.h"
+#include <math.h>
 #include <stdint.h>
 
 /* USER CODE END Includes */
@@ -156,14 +157,24 @@ void controlTask(void *args) {
 
 	xLastWakeTime = xTaskGetTickCount();
 
+	static float time = 0.0f;
+
 	for (;;) {
 		xSemaphoreTake(mutex, portMAX_DELAY);
 		float dvLocal = dv;
 		float mvLocal = mv;
+		float a_local = a;
+		float b_local = b;
+		float c_local = c;
+		xSemaphoreGive(mutex);
+
+
+		xSemaphoreTake(mutex, portMAX_DELAY);
+		dv = sinus_value;
 		xSemaphoreGive(mutex);
 
 		// PID output is already saturated to [0, CS_MAX]
-		uint16_t csLocal = (uint16_t) PID_Update(&pid, dvLocal, mvLocal);
+		uint16_t csLocal = (uint16_t) PID_Update(&pid, sinus_value, mvLocal);
 
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, csLocal);
 

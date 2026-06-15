@@ -168,6 +168,9 @@ void controlTask(void *args) {
 		float c_local = c;
 		xSemaphoreGive(mutex);
 
+		time += PID_DT;
+		float sinus_value_volts = a_local * sinf(b_local*time) + c_local;
+		float sinus_value = sinus_value_volts * (CS_MAX/3.3f);
 
 		xSemaphoreTake(mutex, portMAX_DELAY);
 		dv = sinus_value;

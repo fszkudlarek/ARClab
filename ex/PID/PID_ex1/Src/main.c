@@ -36,6 +36,7 @@
 #include "task.h"
 #include "semphr.h"
 #include "queue.h"
+#include "event_groups.h"
 #include "pid.h"
 #include <math.h>
 #include <stdint.h>
@@ -63,6 +64,9 @@
 // DAC is 12-bit -> control signal range [0, 4095]
 #define CS_MAX   4095.0f
 
+// event group bit: measure signals that a fresh sample is available
+#define MV_READY_BIT    (1 << 0)   // measure published a new mv
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -74,7 +78,8 @@
 
 /* USER CODE BEGIN PV */
 
-// shared process values, protected by 'mutex'
+// shared process values (word-sized -> atomic access on Cortex-M);
+// freshness is signalled through the 'dataEvents' event group
 uint16_t mv = 0;   // measured value
 uint16_t dv = 0;   // desired value
 uint16_t cs = 0;   // control signal
@@ -88,10 +93,10 @@ float c = 0;
 PID_t pid;
 
 // synchronization primitives
-SemaphoreHandle_t mutex;     // guards mv, dv and cs
-SemaphoreHandle_t adcReady;  // given by the ADC conversion-complete ISR
-QueueHandle_t uartQueue;     // characters received over the serial port
-uint8_t rxByte;              // single-byte buffer for HAL_UART_Receive_IT
+EventGroupHandle_t dataEvents; // measure -> control handoff (MV_READY_BIT)
+SemaphoreHandle_t adcReady;    // given by the ADC conversion-complete ISR
+QueueHandle_t uartQueue;       // characters received over the serial port
+uint8_t rxByte;                // single-byte buffer for HAL_UART_Receive_IT
 
 /* USER CODE END PV */
 
@@ -144,48 +149,41 @@ void measureTask(void *args) {
 		xSemaphoreTake(adcReady, portMAX_DELAY);
 		uint16_t v = HAL_ADC_GetValue(&hadc1);
 
-		xSemaphoreTake(mutex, portMAX_DELAY);
+		// publish the new measurement and flag it as ready
 		mv = v;
-		xSemaphoreGive(mutex);
+		xEventGroupSetBits(dataEvents, MV_READY_BIT);
 
 		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
 	}
 }
 
 void controlTask(void *args) {
-	TickType_t xLastWakeTime;
-
-	xLastWakeTime = xTaskGetTickCount();
-
 	static float time = 0.0f;
 
 	for (;;) {
-		xSemaphoreTake(mutex, portMAX_DELAY);
-		float dvLocal = dv;
+		// run once per fresh measurement (paced by measureTask, ~50 Hz)
+		xEventGroupWaitBits(dataEvents, MV_READY_BIT,
+				pdTRUE,   // clear the bit on exit
+				pdFALSE,  // only this bit
+				portMAX_DELAY);
+
 		float mvLocal = mv;
 		float a_local = a;
 		float b_local = b;
 		float c_local = c;
-		xSemaphoreGive(mutex);
 
 		time += PID_DT;
 		float sinus_value_volts = a_local * sinf(b_local*time) + c_local;
 		float sinus_value = sinus_value_volts * (CS_MAX/3.3f);
 
-		xSemaphoreTake(mutex, portMAX_DELAY);
 		dv = sinus_value;
-		xSemaphoreGive(mutex);
 
 		// PID output is already saturated to [0, CS_MAX]
 		uint16_t csLocal = (uint16_t) PID_Update(&pid, sinus_value, mvLocal);
 
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, csLocal);
 
-		xSemaphoreTake(mutex, portMAX_DELAY);
 		cs = csLocal;
-		xSemaphoreGive(mutex);
-
-		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
 	}
 }
 
@@ -195,11 +193,9 @@ void commTask(void *args) {
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
-		xSemaphoreTake(mutex, portMAX_DELAY);
 		uint16_t mvLocal = mv;
 		uint16_t dvLocal = dv;
 		uint16_t csLocal = cs;
-		xSemaphoreGive(mutex);
 		int16_t errorLocal = dvLocal - mvLocal;
 
 		int16_t mvLocal_mV = convert_to_mV(mvLocal);
@@ -235,9 +231,7 @@ void userTask(void *args) {
 						a_local = 2.0;
 						break;
 				}
-				xSemaphoreTake(mutex, portMAX_DELAY);
 				a = a_local;
-				xSemaphoreGive(mutex);
 			}
 			if (character >= 'a' && character <= 'c') {
 				float b_local;
@@ -252,9 +246,7 @@ void userTask(void *args) {
 						b_local = 0.8;
 						break;
 				}
-				xSemaphoreTake(mutex, portMAX_DELAY);
 				b = b_local;
-				xSemaphoreGive(mutex);
 			}
 			if (character >= 'x' && character <= 'z') {
 				float c_local;
@@ -269,9 +261,7 @@ void userTask(void *args) {
 						c_local = 1.65;
 						break;
 				}
-				xSemaphoreTake(mutex, portMAX_DELAY);
 				c = c_local;
-				xSemaphoreGive(mutex);
 			}
 		}
 
@@ -326,8 +316,8 @@ int main(void)
 	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 
 	// create all necessary synchronization mechanisms
-	mutex = xSemaphoreCreateMutex();
-	configASSERT(mutex != NULL);
+	dataEvents = xEventGroupCreate();
+	configASSERT(dataEvents != NULL);
 	adcReady = xSemaphoreCreateBinary();
 	configASSERT(adcReady != NULL);
 	uartQueue = xQueueCreate(8, sizeof(uint8_t));
